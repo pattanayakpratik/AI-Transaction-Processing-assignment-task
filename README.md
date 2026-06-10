@@ -22,6 +22,53 @@ This repository contains the backend and DevOps assignment for the Alemeno inter
    * Includes 3-attempt exponential backoff for fault tolerance.
 6. **Worker** saves the final cleaned data, anomalies, and summary back to **PostgreSQL**.
 
+## Diagram 
+```mermaid
+flowchart TB
+
+    %% Styles
+    classDef client fill:#e1f5fe,stroke:#3b82f6,stroke-width:2px,color:#000;
+    classDef django fill:#e8f5e9,stroke:#0288d1,stroke-width:2px,color:#000;
+    classDef db fill:#fff3e0,stroke:#388e3c,stroke-width:2px,color:#000;
+    classDef queue fill:#ffebee,stroke:#f57c00,stroke-width:2px,color:#000;
+    classDef worker fill:#f3e5f5,stroke:#d32f2f,stroke-width:2px,color:#000;
+    classDef external fill:#fce4ec,stroke:#7b1fa2,stroke-width:2px,color:#000;
+
+    %% Client Layer
+    Client((Client / cURL)):::client
+
+    %% API Layer
+    API["Django REST API<br/>Port 8000"]:::django
+
+    %% Infrastructure Layer
+    DB[("PostgreSQL DB<br/>Port 5432")]:::db
+    Redis[["Redis Message Broker<br/>Port 6379"]]:::queue
+
+    %% Worker Layer
+    Worker["Celery Worker Process"]:::worker
+
+    %% External Service Layer
+    Gemini{"Google Gemini<br/>1.5 Flash API"}:::external
+
+    %% Upload Flow
+    Client -->|"1. POST /jobs/upload (CSV)"| API
+    API -->|"2. Create Job (Status: Pending)"| DB
+    API -->|"3. Enqueue Process Task"| Redis
+    API -.->|"4. Return 202 Accepted (Job ID)"| Client
+
+    %% Background Processing Flow
+    Redis -->|"5. Consume Task"| Worker
+    Worker -->|"6. Send Unclassified Batch"| Gemini
+    Gemini -.->|"7. Return JSON Classifications\n(or trigger 3x retry loop)"| Worker
+    Worker -->|"8. Save Cleaned Data,\nAnomalies & Mark Completed"| DB
+
+    %% Result Retrieval Flow
+    Client -->|"9. GET /jobs/{id}/results"| API
+    API -->|"10. Fetch Final Results"| DB
+    DB -.->|"11. Return JSON Summary"| API
+    API -.->|"12. 200 OK (Data)"| Client
+```    
+
 ## ⚙️ Setup & Installation
 
 ### Prerequisites
@@ -44,7 +91,6 @@ Create a `.env` file in the `app/` directory (where `docker-compose.yml` is loca
 GEMINI_API_KEY=your_actual_api_key_here
 ```
 
-**Note:** Do not commit the `.env` file to version control.
 
 ### 3. Build and Run the Stack
 
