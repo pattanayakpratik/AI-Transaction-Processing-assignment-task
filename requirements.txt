@@ -1,0 +1,8 @@
+django
+djangorestframework
+psycopg2-binary
+celery
+redis
+pandas
+google-generativeai
+python-dotenv
